@@ -34,3 +34,4 @@ Container (Ubuntu 24.04)
 ## Design Logs
 
 - [#001 - Network Isolation](./001-network-isolation.md)
+- [#002 - Zsh Setup](./002-zsh-setup.md)

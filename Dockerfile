@@ -4,7 +4,10 @@ ARG HOST_UID=501
 ARG HOST_GID=20
 
 # Avoid interactive prompts during package installation
-ENV DEBIAN_FRONTEND=noninteractive
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TERM=xterm-256color
+ENV COLORTERM=truecolor
+ENV HISTORY_IGNORE="(exit)"
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -43,8 +46,22 @@ RUN mkdir -p /Users/daniel && \
     ln -s /home/dev/.claude /Users/daniel/.claude && \
     ln -s /home/dev/projects /Users/daniel/Projects
 
-# Switch to dev user
+# Copy host oh-my-zsh and zsh config
 USER dev
+COPY --chown=dev zsh/.oh-my-zsh/ /home/dev/.oh-my-zsh/
+COPY --chown=dev zsh/.zshrc /home/dev/.zshrc
+
+# Install fzf
+RUN git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf && \
+    ~/.fzf/install --all
+
+# Container-specific shell configs
+COPY --chown=dev zsh/aliases.zsh /home/dev/.zsh_aliases
+COPY --chown=dev zsh/fzf-settings.zsh /home/dev/.zsh_fzf
+
+RUN echo 'source /home/dev/.zsh_aliases' >> ~/.zshrc && \
+    echo 'source /home/dev/.zsh_fzf' >> ~/.zshrc && \
+    echo 'export PROMPT='"'"'%(?:%{$fg_bold[green]%}%1{➜%} :%{$fg_bold[red]%}%1{➜%} )%{$fg[yellow]%}@%m %{$fg[cyan]%}%c%{$reset_color%} $(git_prompt_info)'"'"'' >> ~/.zshrc
 WORKDIR /projects
 
-CMD ["/bin/bash"]
+CMD ["/bin/zsh"]

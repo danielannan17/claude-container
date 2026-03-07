@@ -21,12 +21,24 @@ usage() {
 }
 
 build_image() {
+    local build_dir
+    build_dir="$(cd "$(dirname "$0")" && pwd)"
+
+    # Copy zsh config into build context
+    cp "$HOME/.zshrc" "$build_dir/zsh/.zshrc"
+    rm -rf "$build_dir/zsh/.oh-my-zsh"
+    rsync -a --exclude '.git' "$HOME/.oh-my-zsh/" "$build_dir/zsh/.oh-my-zsh/"
+
     echo "Building claude-sandbox image..."
     docker build \
         --build-arg HOST_UID="$(id -u)" \
         --build-arg HOST_GID="$(id -g)" \
         -t "$IMAGE_NAME" \
-        "$(cd "$(dirname "$0")" && pwd)"
+        "$build_dir"
+
+    # Clean up
+    rm "$build_dir/zsh/.zshrc"
+    rm -rf "$build_dir/zsh/.oh-my-zsh"
 }
 
 start_container() {
@@ -38,8 +50,8 @@ start_container() {
         -v "$CLAUDE_DIR:/home/dev/.claude"
         -v "$HOME/.config/nvim:/home/dev/.config/nvim"
         -v "$HOME/.gitconfig:/home/dev/.gitconfig:ro"
-        -v "$HOME/.zshrc:/home/dev/.zshrc:ro"
-        -v "$HOME/.oh-my-zsh:/home/dev/.oh-my-zsh:ro"
+        -v "$(cd "$(dirname "$0")" && pwd)/.claude.json:/home/dev/.claude.json"
+        -v "$(cd "$(dirname "$0")" && pwd)/zsh/.zsh_history:/home/dev/.zsh_history"
         -w /home/dev/projects
     )
 
@@ -109,6 +121,7 @@ case "${1:-}" in
         container_status
         ;;
     build)
+        stop_container
         build_image
         ;;
     help|--help|-h)
