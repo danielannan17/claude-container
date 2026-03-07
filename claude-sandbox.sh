@@ -5,15 +5,19 @@ CONTAINER_NAME="claude-sandbox"
 IMAGE_NAME="claude-sandbox"
 PROJECTS_DIR="${CLAUDE_SANDBOX_PROJECTS:-$HOME/Projects}"
 CLAUDE_DIR="${CLAUDE_SANDBOX_CLAUDE_DIR:-$HOME/.claude}"
+ISOLATED=false
 
 usage() {
-    echo "Usage: claude-sandbox [start|stop|status|build]"
+    echo "Usage: claude-sandbox [--isolated] [start|stop|status|build]"
     echo ""
     echo "Commands:"
-    echo "  (no args)  Start or attach to the sandbox container"
-    echo "  stop       Stop the sandbox container"
-    echo "  status     Show container status"
-    echo "  build      Rebuild the Docker image"
+    echo "  (no args)    Start or attach to the sandbox container"
+    echo "  stop         Stop the sandbox container"
+    echo "  status       Show container status"
+    echo "  build        Rebuild the Docker image"
+    echo ""
+    echo "Options:"
+    echo "  --isolated   Block all internet except Anthropic API"
 }
 
 build_image() {
@@ -30,9 +34,13 @@ start_container() {
         --name "$CONTAINER_NAME"
         --hostname claude-sandbox
         -it
-        -v "$PROJECTS_DIR:/projects"
+        -v "$PROJECTS_DIR:/home/dev/projects"
         -v "$CLAUDE_DIR:/home/dev/.claude"
-        -w /projects
+        -v "$HOME/.config/nvim:/home/dev/.config/nvim"
+        -v "$HOME/.gitconfig:/home/dev/.gitconfig:ro"
+        -v "$HOME/.zshrc:/home/dev/.zshrc:ro"
+        -v "$HOME/.oh-my-zsh:/home/dev/.oh-my-zsh:ro"
+        -w /home/dev/projects
     )
 
     # Pass ANTHROPIC_API_KEY if set
@@ -40,13 +48,32 @@ start_container() {
         docker_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
     fi
 
+    # If isolated mode, add iptables capability and run with network restrictions
+    if [[ "$ISOLATED" == true ]]; then
+        docker_args+=(--cap-add NET_ADMIN)
+    fi
+
     echo "Starting claude-sandbox container..."
-    docker run "${docker_args[@]}" "$IMAGE_NAME"
+    if [[ "$ISOLATED" == true ]]; then
+        # Start detached, apply firewall rules, then attach
+        docker run -d "${docker_args[@]}" "$IMAGE_NAME" sleep infinity
+        echo "Applying network isolation (allowing only Anthropic API)..."
+        docker exec "$CONTAINER_NAME" iptables -A OUTPUT -o lo -j ACCEPT
+        docker exec "$CONTAINER_NAME" iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
+        docker exec "$CONTAINER_NAME" iptables -A OUTPUT -p tcp --dport 443 -d api.anthropic.com -j ACCEPT
+        docker exec "$CONTAINER_NAME" iptables -A OUTPUT -p tcp --dport 443 -d anthropic.com -j ACCEPT
+        docker exec "$CONTAINER_NAME" iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+        docker exec "$CONTAINER_NAME" iptables -A OUTPUT -j DROP
+        echo "Network isolated. Only Anthropic API traffic allowed."
+        docker exec -it "$CONTAINER_NAME" /bin/zsh
+    else
+        docker run "${docker_args[@]}" "$IMAGE_NAME"
+    fi
 }
 
 attach_container() {
     echo "Attaching to running claude-sandbox container..."
-    docker exec -it "$CONTAINER_NAME" /bin/bash
+    docker exec -it "$CONTAINER_NAME" /bin/zsh
 }
 
 stop_container() {
@@ -65,6 +92,14 @@ container_status() {
         echo "claude-sandbox is not running"
     fi
 }
+
+# Parse flags
+while [[ "${1:-}" == --* ]]; do
+    case "$1" in
+        --isolated) ISOLATED=true; shift ;;
+        *) echo "Unknown option: $1"; usage; exit 1 ;;
+    esac
+done
 
 case "${1:-}" in
     stop)
