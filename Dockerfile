@@ -20,15 +20,28 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     gnupg \
     sudo \
-    neovim \
     zsh \
     iptables \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Neovim (latest stable from GitHub)
+RUN ARCH=$(dpkg --print-architecture | sed 's/amd64/x86_64/') \
+    && curl -Lo nvim.tar.gz "https://github.com/neovim/neovim/releases/latest/download/nvim-linux-${ARCH}.tar.gz" \
+    && tar xf nvim.tar.gz \
+    && cp -r nvim-linux-${ARCH}/* /usr/local/ \
+    && rm -rf nvim.tar.gz nvim-linux-${ARCH}
 
 # Create dev user with matching host UID/GID
 RUN groupadd -g ${HOST_GID} dev 2>/dev/null || true && \
     useradd -m -u ${HOST_UID} -g ${HOST_GID} -s /bin/zsh dev && \
     echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Install lazygit
+RUN LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | jq -r '.tag_name' | sed 's/^v//') \
+    && curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x86_64/').tar.gz" \
+    && tar xf lazygit.tar.gz lazygit \
+    && install lazygit /usr/local/bin \
+    && rm lazygit lazygit.tar.gz
 
 # Install GitHub CLI
 RUN (type -p wget >/dev/null || (apt-get update && apt-get install -y wget)) \
@@ -56,11 +69,15 @@ RUN mkdir -p /Users/daniel && \
     ln -s /home/dev/.claude /Users/daniel/.claude && \
     ln -s /home/dev/projects /Users/daniel/Projects
 
-# Copy host oh-my-zsh and zsh config
 USER dev
+
+# Copy host oh-my-zsh and zsh config
 COPY --chown=dev zsh/.oh-my-zsh/ /home/dev/.oh-my-zsh/
 COPY --chown=dev zsh/.zshrc /home/dev/.zshrc
 COPY --chown=dev zsh/.gitconfig /home/dev/.gitconfig
+
+# Pre-create nvim data dir so the named volume inherits dev ownership (not root)
+RUN mkdir -p /home/dev/.local/share/nvim
 
 # Install fzf
 RUN git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf && \

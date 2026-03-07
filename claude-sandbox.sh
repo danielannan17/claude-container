@@ -64,7 +64,8 @@ start_container() {
         -it
         -v "$PROJECTS_DIR:/home/dev/projects"
         -v "$CLAUDE_DIR:/home/dev/.claude"
-        -v "$HOME/.config/nvim:/home/dev/.config/nvim"
+        -v "$HOME/.config/nvim:/home/dev/.config/nvim:ro"
+        -v "claude-sandbox-nvim-data:/home/dev/.local/share/nvim"
 
         -v "$(cd "$(dirname "$0")" && pwd)/.claude.json:/home/dev/.claude.json"
         -v "$(cd "$(dirname "$0")" && pwd)/zsh/.zsh_history:/home/dev/.zsh_history"
