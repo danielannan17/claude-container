@@ -1,10 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Load .env if present
+if [[ -f "$SCRIPT_DIR/.env" ]]; then
+    set -a
+    source "$SCRIPT_DIR/.env"
+    set +a
+fi
+
 CONTAINER_NAME="claude-sandbox"
 IMAGE_NAME="claude-sandbox"
 PROJECTS_DIR="${CLAUDE_SANDBOX_PROJECTS:-$HOME/Projects}"
+PROJECTS_DIR="${PROJECTS_DIR/#\~/$HOME}"
 CLAUDE_DIR="${CLAUDE_SANDBOX_CLAUDE_DIR:-$HOME/.claude}"
+CLAUDE_DIR="${CLAUDE_DIR/#\~/$HOME}"
+GITHUB_APP_PEM="${GITHUB_APP_PEM/#\~/$HOME}"
+GITHUB_APP_CLIENT_ID="${GITHUB_APP_CLIENT_ID:-}"
+GITHUB_APP_INSTALLATION_ID="${GITHUB_APP_INSTALLATION_ID:-}"
 ISOLATED=false
 
 usage() {
@@ -26,6 +40,7 @@ build_image() {
 
     # Copy zsh config into build context
     cp "$HOME/.zshrc" "$build_dir/zsh/.zshrc"
+    cp "$HOME/.gitconfig" "$build_dir/zsh/.gitconfig"
     rm -rf "$build_dir/zsh/.oh-my-zsh"
     rsync -a --exclude '.git' "$HOME/.oh-my-zsh/" "$build_dir/zsh/.oh-my-zsh/"
 
@@ -38,6 +53,7 @@ build_image() {
 
     # Clean up
     rm "$build_dir/zsh/.zshrc"
+    rm "$build_dir/zsh/.gitconfig"
     rm -rf "$build_dir/zsh/.oh-my-zsh"
 }
 
@@ -49,11 +65,20 @@ start_container() {
         -v "$PROJECTS_DIR:/home/dev/projects"
         -v "$CLAUDE_DIR:/home/dev/.claude"
         -v "$HOME/.config/nvim:/home/dev/.config/nvim"
-        -v "$HOME/.gitconfig:/home/dev/.gitconfig:ro"
+
         -v "$(cd "$(dirname "$0")" && pwd)/.claude.json:/home/dev/.claude.json"
         -v "$(cd "$(dirname "$0")" && pwd)/zsh/.zsh_history:/home/dev/.zsh_history"
         -w /home/dev/projects
     )
+
+    # Mount GitHub App private key if it exists
+    if [[ -f "$GITHUB_APP_PEM" ]]; then
+        docker_args+=(-v "$GITHUB_APP_PEM:/home/dev/.github-app-key.pem:ro")
+        docker_args+=(-e "GITHUB_APP_CLIENT_ID=$GITHUB_APP_CLIENT_ID")
+        docker_args+=(-e "GITHUB_APP_INSTALLATION_ID=$GITHUB_APP_INSTALLATION_ID")
+    else
+        echo "Warning: GITHUB_APP_PEM not set or file not found — git/gh auth will not be configured"
+    fi
 
     # Pass ANTHROPIC_API_KEY if set
     if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
@@ -74,6 +99,8 @@ start_container() {
         docker exec "$CONTAINER_NAME" iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
         docker exec "$CONTAINER_NAME" iptables -A OUTPUT -p tcp --dport 443 -d api.anthropic.com -j ACCEPT
         docker exec "$CONTAINER_NAME" iptables -A OUTPUT -p tcp --dport 443 -d anthropic.com -j ACCEPT
+        docker exec "$CONTAINER_NAME" iptables -A OUTPUT -p tcp --dport 443 -d api.github.com -j ACCEPT
+        docker exec "$CONTAINER_NAME" iptables -A OUTPUT -p tcp --dport 443 -d github.com -j ACCEPT
         docker exec "$CONTAINER_NAME" iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
         docker exec "$CONTAINER_NAME" iptables -A OUTPUT -j DROP
         echo "Network isolated. Only Anthropic API traffic allowed."

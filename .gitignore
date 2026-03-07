@@ -1,3 +1,4 @@
 .env
 .claude.json
 zsh/.zsh_history
+*.pem
