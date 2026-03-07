@@ -34,25 +34,11 @@ claude-sandbox [--isolated] [start|stop|status|build]
 
 ### Options
 
-| Option       | Description                                    |
-| ------------ | ---------------------------------------------- |
-| `--isolated` | Block all internet except the Anthropic API    |
-
-## What's Mounted
-
-The container mounts the following from the host:
-
-- `~/Projects` (or `$CLAUDE_SANDBOX_PROJECTS`) → `/home/dev/projects`
-- `~/.claude` (or `$CLAUDE_SANDBOX_CLAUDE_DIR`) → `/home/dev/.claude`
-- `~/.config/nvim` → `/home/dev/.config/nvim`
+| Option       | Description                                                          |
+| ------------ | -------------------------------------------------------------------- |
+| `--isolated` | Block all internet except Anthropic API and GitHub                   |
 
 ## Environment Variables
-
-Copy `.env.sample` to `.env` and fill in the values:
-
-```bash
-cp .env.sample .env
-```
 
 | Variable                      | Default      | Description                                                                 |
 | ----------------------------- | ------------ | --------------------------------------------------------------------------- |
@@ -62,23 +48,6 @@ cp .env.sample .env
 | `GITHUB_APP_PEM`              | _(none)_     | Path to the GitHub App private key `.pem` file on the host                  |
 | `GITHUB_APP_CLIENT_ID`        | _(none)_     | Client ID of the GitHub App (used as `iss` in JWT for token generation)     |
 | `GITHUB_APP_INSTALLATION_ID`  | _(none)_     | Installation ID of the GitHub App (found in the installation URL on GitHub) |
-
-## GitHub App Authentication
-
-If `GITHUB_APP_PEM`, `GITHUB_APP_CLIENT_ID`, and `GITHUB_APP_INSTALLATION_ID` are set, the container automatically configures `git` and `gh` CLI to authenticate via the GitHub App.
-
-- **git** uses a credential helper that generates a fresh installation token on each push/pull/clone
-- **gh** generates a fresh token on each invocation via a shell wrapper
-
-Tokens are never stored — they're generated on demand, so there are no expiry issues.
-
-## Network Isolation
-
-With `--isolated`, the container uses iptables to block all outbound traffic except:
-
-- Loopback
-- DNS (UDP port 53)
-- HTTPS to `api.anthropic.com`, `anthropic.com`, `api.github.com`, and `github.com`
 
 ## What's Included
 
