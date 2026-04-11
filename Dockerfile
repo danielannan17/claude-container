@@ -76,8 +76,13 @@ COPY --chown=dev zsh/.oh-my-zsh/ /home/dev/.oh-my-zsh/
 COPY --chown=dev zsh/.zshrc /home/dev/.zshrc
 COPY --chown=dev zsh/.gitconfig /home/dev/.gitconfig
 
-# Pre-create nvim data dir so the named volume inherits dev ownership (not root)
-RUN mkdir -p /home/dev/.local/share/nvim
+# Copy nvim config and apply patches
+COPY --chown=dev nvim/ /home/dev/.config/nvim/
+COPY --chown=dev terminal_cmd.patch /tmp/terminal_cmd.patch
+RUN cd /home/dev/.config/nvim && patch -p0 < /tmp/terminal_cmd.patch && rm /tmp/terminal_cmd.patch
+
+# Pre-create dirs so named volumes inherit dev ownership (not root)
+RUN mkdir -p /home/dev/.local/share/nvim /home/dev/.claude/ide
 
 # Install fzf
 RUN git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf && \

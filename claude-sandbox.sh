@@ -44,6 +44,10 @@ build_image() {
     rm -rf "$build_dir/zsh/.oh-my-zsh"
     rsync -a --exclude '.git' "$HOME/.oh-my-zsh/" "$build_dir/zsh/.oh-my-zsh/"
 
+    # Copy nvim config into build context
+    rm -rf "$build_dir/nvim"
+    rsync -a --exclude '.git' "$HOME/.config/nvim/" "$build_dir/nvim/"
+
     echo "Building claude-sandbox image..."
     docker build \
         --build-arg HOST_UID="$(id -u)" \
@@ -55,6 +59,7 @@ build_image() {
     rm "$build_dir/zsh/.zshrc"
     rm "$build_dir/zsh/.gitconfig"
     rm -rf "$build_dir/zsh/.oh-my-zsh"
+    rm -rf "$build_dir/nvim"
 }
 
 start_container() {
@@ -64,7 +69,7 @@ start_container() {
         -it
         -v "$PROJECTS_DIR:/home/dev/projects"
         -v "$CLAUDE_DIR:/home/dev/.claude"
-        -v "$HOME/.config/nvim:/home/dev/.config/nvim:ro"
+        -v "claude-sandbox-ide:/home/dev/.claude/ide"
         -v "claude-sandbox-nvim-data:/home/dev/.local/share/nvim"
 
         -v "$(cd "$(dirname "$0")" && pwd)/.claude.json:/home/dev/.claude.json"

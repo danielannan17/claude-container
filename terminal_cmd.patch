@@ -1,0 +1,10 @@
+--- lua/custom/plugins/ai.lua
++++ lua/custom/plugins/ai.lua
+@@ -40,6 +40,7 @@
+     "coder/claudecode.nvim",
+     dependencies = { "folke/snacks.nvim" },
+     opts = {
++      terminal_cmd = "/usr/bin/claude --dangerously-skip-permissions",
+       terminal = {
+         ---@module "snacks"
+         ---@type snacks.win.Config|{}
