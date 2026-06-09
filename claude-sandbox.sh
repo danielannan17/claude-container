@@ -71,59 +71,107 @@ inject_argent_env() {
 
     local argent_config="$HOME/.argent/tool-server.json"
 
-    # If config doesn't exist, the server has never been run — start it on the
-    # default port so it can write the config file, then fall through to re-read it.
-    if [[ ! -f "$argent_config" ]]; then
-        local default_port=4000
-        echo "argent tool-server config not found — starting on port ${default_port}..."
-        argent server start --host 0.0.0.0 --port "${default_port}" --detach
-        # Wait for the server to write the config file (3 attempts, 2s apart)
+    _argent_server_status() { argent server status --json 2>/dev/null; }
+    _argent_server_healthy() {
+        [[ "$(_argent_server_status | jq -r '.healthy // false')" == "true" ]]
+    }
+    _argent_server_reachable_from_container() {
+        local host
+        host="$(_argent_server_status | jq -r '.host // empty')"
+        [[ "$host" == "0.0.0.0" || "$host" == "::" ]]
+    }
+
+    _argent_start() {
+        argent server start --host 0.0.0.0 --detach &>/dev/null &
         local i
-        for i in 1 2 3; do
+        for i in 1 2 3 4 5; do
             sleep 2
-            [[ -f "$argent_config" ]] && break
+            _argent_server_healthy && return 0
         done
-        if [[ ! -f "$argent_config" ]]; then
+        return 1
+    }
+
+    if ! _argent_server_healthy; then
+        echo "argent tool-server not running — starting..."
+        if ! _argent_start; then
             echo "Warning: argent tool-server failed to start — skipping auto-link"
+            unset -f _argent_server_status _argent_server_healthy _argent_server_reachable_from_container _argent_start
             return
         fi
+        echo "argent tool-server started — auto-link enabled"
+    elif ! _argent_server_reachable_from_container; then
+        local argent_port
+        argent_port="$(_argent_server_status | jq -r '.port // empty')"
+        echo "argent tool-server running on localhost only (port ${argent_port}) — restarting on 0.0.0.0..."
+        argent server stop
+        if ! _argent_start; then
+            echo "Warning: argent tool-server failed to restart — skipping auto-link"
+            unset -f _argent_server_status _argent_server_healthy _argent_server_reachable_from_container _argent_start
+            return
+        fi
+        echo "argent tool-server restarted — auto-link enabled"
+    else
+        local argent_port
+        argent_port="$(_argent_server_status | jq -r '.port // empty')"
+        echo "argent tool-server detected on port ${argent_port} — auto-link enabled"
     fi
 
-    # Read token and port from config
+    unset -f _argent_server_status _argent_server_healthy _argent_server_reachable_from_container _argent_start
+
     local argent_token argent_port
     argent_token="$(jq -r '.token // empty' "$argent_config" 2>/dev/null)"
     argent_port="$(jq -r '.port // empty' "$argent_config" 2>/dev/null)"
 
-    # Validate both fields are present
     if [[ -z "$argent_token" || -z "$argent_port" ]]; then
-        echo "Warning: argent tool-server.json missing token or port — skipping auto-link"
+        echo "Warning: could not read argent token/port — skipping auto-link"
         return
     fi
 
-    # If the server is not reachable, attempt to start it
-    if ! curl -sf --max-time 2 "http://127.0.0.1:${argent_port}/health" >/dev/null 2>&1; then
-        echo "argent tool-server not running — starting on port ${argent_port}..."
-        argent server start --host 0.0.0.0 --port "${argent_port}" --detach
-        # Retry health check (3 attempts, 2s apart)
+    docker_args+=(-e "ARGENT_TOOL_SERVER_TOKEN=$argent_token")
+    docker_args+=(-e "ARGENT_TOOL_SERVER_PORT=$argent_port")
+}
+
+inject_voicemode_env() {
+    # Check voicemode is installed
+    if ! command -v voicemode >/dev/null 2>&1; then
+        echo "voicemode not installed, skipping"
+        return
+    fi
+
+    _voicemode_running() {
+        voicemode service status voicemode >/dev/null 2>&1
+    }
+
+    local port="${VOICEMODE_SERVE_PORT:-8765}"
+
+    if ! _voicemode_running; then
+        echo "voicemode serve not running — starting on port ${port}..."
+        mkdir -p "$HOME/.voicemode"
+        voicemode serve --host 0.0.0.0 --port "${port}" --allow-ip 172.17.0.0/16 \
+            >"$HOME/.voicemode/serve.log" 2>&1 &
+        # Wait for the service to become running (3 attempts, 2s apart)
         local i started=0
         for i in 1 2 3; do
             sleep 2
-            if curl -sf --max-time 2 "http://127.0.0.1:${argent_port}/health" >/dev/null 2>&1; then
+            if _voicemode_running; then
                 started=1
                 break
             fi
         done
         if [[ "$started" -eq 0 ]]; then
-            echo "Warning: argent tool-server failed to start — skipping auto-link"
+            echo "Warning: voicemode serve failed to start — skipping"
+            unset -f _voicemode_running
             return
         fi
-        echo "argent tool-server started on port ${argent_port} — auto-link enabled"
+        echo "voicemode serve started on port ${port} — container will connect via HTTP"
     else
-        echo "argent tool-server detected on port ${argent_port} — auto-link enabled"
+        port="$(voicemode service status voicemode 2>/dev/null | awk '/Port:/{print $NF}')"
+        echo "voicemode serve detected on port ${port} — container will connect via HTTP"
     fi
 
-    docker_args+=(-e "ARGENT_TOOL_SERVER_TOKEN=$argent_token")
-    docker_args+=(-e "ARGENT_TOOL_SERVER_PORT=$argent_port")
+    unset -f _voicemode_running
+
+    docker_args+=(-e "VOICEMODE_SERVE_PORT=${port}")
 }
 
 start_container() {
@@ -138,7 +186,7 @@ start_container() {
 
         -v "$(cd "$(dirname "$0")" && pwd)/.claude.json:/home/dev/.claude.json"
         -v "$(cd "$(dirname "$0")" && pwd)/zsh/.zsh_history:/home/dev/.zsh_history"
-        -w /home/dev/projects
+        -w /home/dev/projects/personal-agent
     )
 
     # Mount GitHub App private key if it exists
@@ -157,6 +205,9 @@ start_container() {
 
     # Pass argent tool-server token and port if the server is configured and reachable
     inject_argent_env
+
+    # Pass voicemode serve port if the server is reachable
+    inject_voicemode_env
 
     # If isolated mode, add iptables capability and run with network restrictions
     if [[ "$ISOLATED" == true ]]; then
