@@ -8,6 +8,8 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV TERM=xterm-256color
 ENV COLORTERM=truecolor
 ENV HISTORY_IGNORE="(exit)"
+ENV SHELL=/usr/bin/zsh
+ENV PATH="/home/dev/.local/bin:$PATH"
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -22,6 +24,10 @@ RUN apt-get update && apt-get install -y \
     sudo \
     zsh \
     iptables \
+    # Used for nvim
+    ripgrep \
+    # Used for claude code teammates
+    tmux \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Neovim (latest stable from GitHub)
@@ -58,8 +64,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_23.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code globally
-RUN npm install -g @anthropic-ai/claude-code
+# Install Claude Code and pnpm globally
+RUN npm install -g @anthropic-ai/claude-code pnpm
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
@@ -82,11 +88,17 @@ COPY --chown=dev terminal_cmd.patch /tmp/terminal_cmd.patch
 RUN cd /home/dev/.config/nvim && patch -p0 < /tmp/terminal_cmd.patch && rm /tmp/terminal_cmd.patch
 
 # Pre-create dirs so named volumes inherit dev ownership (not root)
-RUN mkdir -p /home/dev/.local/share/nvim /home/dev/.claude/ide
+RUN mkdir -p /home/dev/.local/share/nvim /home/dev/.claude/ide /home/dev/.config/lazygit && touch /home/dev/.config/lazygit/config.yml
 
 # Install fzf
 RUN git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf && \
     ~/.fzf/install --all
+
+# Install poetry
+RUN curl -sSL https://install.python-poetry.org | python3 -
+
+# Install gh-dash extension
+RUN gh extension install dlvhdr/gh-dash
 
 # Container-specific shell configs
 COPY --chown=dev zsh/aliases.zsh /home/dev/.zsh_aliases
