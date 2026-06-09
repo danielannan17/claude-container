@@ -53,8 +53,9 @@ claude-sandbox [--isolated] [start|stop|status|build]
 
 The container image is based on Ubuntu 24.04 and includes:
 
-- Node.js 23.x with Claude Code installed globally
-- GitHub CLI (`gh`)
-- Python 3 with uv
-- Neovim, git, zsh (with oh-my-zsh), fzf
-- ffmpeg, jq, curl
+- Node.js 23.x with [Claude Code](https://github.com/anthropics/claude-code) installed globally
+- [GitHub CLI](https://github.com/cli/cli) (`gh`)
+- Python 3 with [uv](https://github.com/astral-sh/uv)
+- [Neovim](https://github.com/neovim/neovim), git, zsh with [oh-my-zsh](https://github.com/ohmyzsh/ohmyzsh), [fzf](https://github.com/junegunn/fzf), [lazygit](https://github.com/jesseduffield/lazygit)
+- [gh-dash](https://github.com/dlvhdr/gh-dash) (GitHub dashboard, via `gh dash`)
+- jq, curl, ripgrep

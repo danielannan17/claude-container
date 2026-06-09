@@ -64,8 +64,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_23.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code and pnpm globally
-RUN npm install -g @anthropic-ai/claude-code pnpm
+# Install Claude Code, pnpm, and argent globally
+RUN npm install -g @anthropic-ai/claude-code pnpm @swmansion/argent
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
@@ -103,6 +103,7 @@ RUN gh extension install dlvhdr/gh-dash
 # Container-specific shell configs
 COPY --chown=dev zsh/aliases.zsh /home/dev/.zsh_aliases
 COPY --chown=dev zsh/fzf-settings.zsh /home/dev/.zsh_fzf
+COPY --chown=dev zsh/argent.zsh /home/dev/.zsh_argent
 
 # Copy GitHub App auth scripts
 COPY --chown=dev github-app-auth.sh /home/dev/github-app-auth.sh
@@ -110,6 +111,7 @@ COPY --chown=dev github-app-token.sh /home/dev/github-app-token.sh
 
 RUN echo 'source /home/dev/.zsh_aliases' >> ~/.zshrc && \
     echo 'source /home/dev/.zsh_fzf' >> ~/.zshrc && \
+    echo 'source /home/dev/.zsh_argent' >> ~/.zshrc && \
     echo 'if [[ -f /home/dev/.github-app-key.pem && ! -f /tmp/.github-auth-done ]]; then /home/dev/github-app-auth.sh && touch /tmp/.github-auth-done; fi' >> ~/.zshrc && \
     echo 'gh() { GH_TOKEN=$(/home/dev/github-app-token.sh 2>/dev/null) command gh "$@"; }' >> ~/.zshrc && \
     echo 'export PROMPT='"'"'%(?:%{$fg_bold[green]%}%1{➜%} :%{$fg_bold[red]%}%1{➜%} )%{$fg[yellow]%}@%m %{$fg[cyan]%}%c%{$reset_color%} $(git_prompt_info)'"'"'' >> ~/.zshrc

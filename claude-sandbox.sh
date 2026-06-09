@@ -62,6 +62,70 @@ build_image() {
     rm -rf "$build_dir/nvim"
 }
 
+inject_argent_env() {
+    # Check argent is installed
+    if ! command -v argent >/dev/null 2>&1; then
+        echo "argent not installed, skipping tool-server link"
+        return
+    fi
+
+    local argent_config="$HOME/.argent/tool-server.json"
+
+    # If config doesn't exist, the server has never been run — start it on the
+    # default port so it can write the config file, then fall through to re-read it.
+    if [[ ! -f "$argent_config" ]]; then
+        local default_port=4000
+        echo "argent tool-server config not found — starting on port ${default_port}..."
+        argent server start --host 0.0.0.0 --port "${default_port}" --detach
+        # Wait for the server to write the config file (3 attempts, 2s apart)
+        local i
+        for i in 1 2 3; do
+            sleep 2
+            [[ -f "$argent_config" ]] && break
+        done
+        if [[ ! -f "$argent_config" ]]; then
+            echo "Warning: argent tool-server failed to start — skipping auto-link"
+            return
+        fi
+    fi
+
+    # Read token and port from config
+    local argent_token argent_port
+    argent_token="$(jq -r '.token // empty' "$argent_config" 2>/dev/null)"
+    argent_port="$(jq -r '.port // empty' "$argent_config" 2>/dev/null)"
+
+    # Validate both fields are present
+    if [[ -z "$argent_token" || -z "$argent_port" ]]; then
+        echo "Warning: argent tool-server.json missing token or port — skipping auto-link"
+        return
+    fi
+
+    # If the server is not reachable, attempt to start it
+    if ! curl -sf --max-time 2 "http://127.0.0.1:${argent_port}/health" >/dev/null 2>&1; then
+        echo "argent tool-server not running — starting on port ${argent_port}..."
+        argent server start --host 0.0.0.0 --port "${argent_port}" --detach
+        # Retry health check (3 attempts, 2s apart)
+        local i started=0
+        for i in 1 2 3; do
+            sleep 2
+            if curl -sf --max-time 2 "http://127.0.0.1:${argent_port}/health" >/dev/null 2>&1; then
+                started=1
+                break
+            fi
+        done
+        if [[ "$started" -eq 0 ]]; then
+            echo "Warning: argent tool-server failed to start — skipping auto-link"
+            return
+        fi
+        echo "argent tool-server started on port ${argent_port} — auto-link enabled"
+    else
+        echo "argent tool-server detected on port ${argent_port} — auto-link enabled"
+    fi
+
+    docker_args+=(-e "ARGENT_TOOL_SERVER_TOKEN=$argent_token")
+    docker_args+=(-e "ARGENT_TOOL_SERVER_PORT=$argent_port")
+}
+
 start_container() {
     local docker_args=(
         --name "$CONTAINER_NAME"
@@ -90,6 +154,9 @@ start_container() {
     if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
         docker_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
     fi
+
+    # Pass argent tool-server token and port if the server is configured and reachable
+    inject_argent_env
 
     # If isolated mode, add iptables capability and run with network restrictions
     if [[ "$ISOLATED" == true ]]; then
