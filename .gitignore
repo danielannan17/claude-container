@@ -1,4 +1,8 @@
 .env
 .claude.json
 zsh/.zsh_history
+zsh/.zshrc
+zsh/.gitconfig
 *.pem
+nvim/
+.oh-my-zsh/

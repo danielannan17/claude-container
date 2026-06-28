@@ -174,11 +174,24 @@ inject_voicemode_env() {
     docker_args+=(-e "VOICEMODE_SERVE_PORT=${port}")
 }
 
+inject_superwhisper_env() {
+    local port="${SUPERWHISPER_RELAY_PORT:-9001}"
+
+    if ! curl -sf "http://localhost:${port}/health" >/dev/null 2>&1; then
+        echo "Warning: superwhisper relay not reachable on port ${port} — skipping"
+        return
+    fi
+
+    echo "superwhisper relay detected on port ${port} — container will connect via HTTP"
+    docker_args+=(-e "SUPERWHISPER_RELAY_PORT=${port}")
+}
+
 start_container() {
     local docker_args=(
         --name "$CONTAINER_NAME"
         --hostname claude-sandbox
         -it
+        -p 8766:8766
         -v "$PROJECTS_DIR:/home/dev/projects"
         -v "$CLAUDE_DIR:/home/dev/.claude"
         -v "claude-sandbox-ide:/home/dev/.claude/ide"
@@ -186,7 +199,7 @@ start_container() {
 
         -v "$(cd "$(dirname "$0")" && pwd)/.claude.json:/home/dev/.claude.json"
         -v "$(cd "$(dirname "$0")" && pwd)/zsh/.zsh_history:/home/dev/.zsh_history"
-        -w /home/dev/projects/personal-agent
+        -w /home/dev/projects/personal-agent-marketplace/personal-agent
     )
 
     # Mount GitHub App private key if it exists
@@ -208,6 +221,9 @@ start_container() {
 
     # Pass voicemode serve port if the server is reachable
     inject_voicemode_env
+
+    # Pass superwhisper relay port if the relay is reachable
+    inject_superwhisper_env
 
     # If isolated mode, add iptables capability and run with network restrictions
     if [[ "$ISOLATED" == true ]]; then
