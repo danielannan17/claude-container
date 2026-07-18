@@ -3,7 +3,7 @@
 # Used as a git credential helper and gh auth token source.
 set -euo pipefail
 
-PEM_FILE="${GITHUB_APP_PEM:-/home/dev/.github-app-key.pem}"
+PEM_FILE="${GITHUB_APP_PEM:-/Users/daniel/.github-app-key.pem}"
 APP_ID="${GITHUB_APP_CLIENT_ID:-}"
 INSTALLATION_ID="${GITHUB_APP_INSTALLATION_ID:-}"
 

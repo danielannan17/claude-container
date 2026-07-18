@@ -9,11 +9,12 @@ ENV TERM=xterm-256color
 ENV COLORTERM=truecolor
 ENV HISTORY_IGNORE="(exit)"
 ENV SHELL=/usr/bin/zsh
-ENV PATH="/home/dev/.local/bin:$PATH"
+ENV PATH="/Users/daniel/.local/bin:$PATH"
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
+    build-essential \
     git \
     jq \
     python3 \
@@ -39,7 +40,7 @@ RUN ARCH=$(dpkg --print-architecture | sed 's/amd64/x86_64/') \
 
 # Create dev user with matching host UID/GID
 RUN groupadd -g ${HOST_GID} dev 2>/dev/null || true && \
-    useradd -m -u ${HOST_UID} -g ${HOST_GID} -s /bin/zsh dev && \
+    useradd -m -u ${HOST_UID} -g ${HOST_GID} -d /Users/daniel -s /bin/zsh dev && \
     echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Install lazygit
@@ -64,31 +65,31 @@ RUN curl -fsSL https://deb.nodesource.com/setup_23.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code, pnpm, and argent globally
-RUN npm install -g @anthropic-ai/claude-code pnpm @swmansion/argent
+ENV CXXFLAGS="-std=c++20"
+ENV CXX="g++"
+    # Install argent globally
+RUN npm install -g @swmansion/argent
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
-# Symlink macOS host paths so mounted plugin paths resolve correctly
-RUN mkdir -p /Users/daniel && \
-    ln -s /home/dev/.claude /Users/daniel/.claude && \
-    ln -s /home/dev/projects /Users/daniel/Projects
-
 USER dev
 
+# Install Claude Code (must run as dev — installer is $HOME-relative)
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
 # Copy host oh-my-zsh and zsh config
-COPY --chown=dev zsh/.oh-my-zsh/ /home/dev/.oh-my-zsh/
-COPY --chown=dev zsh/.zshrc /home/dev/.zshrc
-COPY --chown=dev zsh/.gitconfig /home/dev/.gitconfig
+COPY --chown=dev zsh/.oh-my-zsh/ /Users/daniel/.oh-my-zsh/
+COPY --chown=dev zsh/.zshrc /Users/daniel/.zshrc
+COPY --chown=dev zsh/.gitconfig /Users/daniel/.gitconfig
 
 # Copy nvim config and apply patches
-COPY --chown=dev nvim/ /home/dev/.config/nvim/
+COPY --chown=dev nvim/ /Users/daniel/.config/nvim/
 COPY --chown=dev terminal_cmd.patch /tmp/terminal_cmd.patch
-RUN cd /home/dev/.config/nvim && patch -p0 < /tmp/terminal_cmd.patch && rm /tmp/terminal_cmd.patch
+RUN cd /Users/daniel/.config/nvim && patch -p0 < /tmp/terminal_cmd.patch && rm /tmp/terminal_cmd.patch
 
 # Pre-create dirs so named volumes inherit dev ownership (not root)
-RUN mkdir -p /home/dev/.local/share/nvim /home/dev/.claude/ide /home/dev/.config/lazygit && touch /home/dev/.config/lazygit/config.yml
+RUN mkdir -p /Users/daniel/.local/share/nvim /Users/daniel/.claude/ide /Users/daniel/.config/lazygit && touch /Users/daniel/.config/lazygit/config.yml
 
 # Install fzf
 RUN git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf && \
@@ -101,21 +102,21 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 RUN gh extension install dlvhdr/gh-dash
 
 # Container-specific shell configs
-COPY --chown=dev zsh/aliases.zsh /home/dev/.zsh_aliases
-COPY --chown=dev zsh/fzf-settings.zsh /home/dev/.zsh_fzf
-COPY --chown=dev zsh/argent.zsh /home/dev/.zsh_argent
+COPY --chown=dev zsh/aliases.zsh /Users/daniel/.zsh_aliases
+COPY --chown=dev zsh/fzf-settings.zsh /Users/daniel/.zsh_fzf
+COPY --chown=dev zsh/argent.zsh /Users/daniel/.zsh_argent
 
 # Copy GitHub App auth scripts
-COPY --chown=dev github-app-auth.sh /home/dev/github-app-auth.sh
-COPY --chown=dev github-app-token.sh /home/dev/github-app-token.sh
+COPY --chown=dev github-app-auth.sh /Users/daniel/github-app-auth.sh
+COPY --chown=dev github-app-token.sh /Users/daniel/github-app-token.sh
 
-RUN echo 'source /home/dev/.zsh_aliases' >> ~/.zshrc && \
-    echo 'source /home/dev/.zsh_fzf' >> ~/.zshrc && \
-    echo 'source /home/dev/.zsh_argent' >> ~/.zshrc && \
-    echo 'if [[ -f /home/dev/.github-app-key.pem && ! -f /tmp/.github-auth-done ]]; then /home/dev/github-app-auth.sh && touch /tmp/.github-auth-done; fi' >> ~/.zshrc && \
-    echo 'gh() { GH_TOKEN=$(/home/dev/github-app-token.sh 2>/dev/null) command gh "$@"; }' >> ~/.zshrc && \
+RUN echo 'source /Users/daniel/.zsh_aliases' >> ~/.zshrc && \
+    echo 'source /Users/daniel/.zsh_fzf' >> ~/.zshrc && \
+    echo 'source /Users/daniel/.zsh_argent' >> ~/.zshrc && \
+    echo 'if [[ -f /Users/daniel/.github-app-key.pem && ! -f /tmp/.github-auth-done ]]; then /Users/daniel/github-app-auth.sh && touch /tmp/.github-auth-done; fi' >> ~/.zshrc && \
+    echo 'gh() { GH_TOKEN=$(/Users/daniel/github-app-token.sh 2>/dev/null) command gh "$@"; }' >> ~/.zshrc && \
     echo 'export PROMPT='"'"'%(?:%{$fg_bold[green]%}%1{➜%} :%{$fg_bold[red]%}%1{➜%} )%{$fg[yellow]%}@%m %{$fg[cyan]%}%c%{$reset_color%} $(git_prompt_info)'"'"'' >> ~/.zshrc
 
-WORKDIR /projects
+WORKDIR /Users/daniel/Projects
 
 CMD ["/bin/zsh"]

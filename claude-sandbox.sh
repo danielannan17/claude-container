@@ -192,19 +192,19 @@ start_container() {
         --hostname claude-sandbox
         -it
         -p 8766:8766
-        -v "$PROJECTS_DIR:/home/dev/projects"
-        -v "$CLAUDE_DIR:/home/dev/.claude"
-        -v "claude-sandbox-ide:/home/dev/.claude/ide"
-        -v "claude-sandbox-nvim-data:/home/dev/.local/share/nvim"
+        -v "$PROJECTS_DIR:/Users/daniel/Projects"
+        -v "$CLAUDE_DIR:/Users/daniel/.claude"
+        -v "claude-sandbox-ide:/Users/daniel/.claude/ide"
+        -v "claude-sandbox-nvim-data:/Users/daniel/.local/share/nvim"
 
-        -v "$(cd "$(dirname "$0")" && pwd)/.claude.json:/home/dev/.claude.json"
-        -v "$(cd "$(dirname "$0")" && pwd)/zsh/.zsh_history:/home/dev/.zsh_history"
-        -w /home/dev/projects/personal-agent-marketplace/personal-agent
+        -v "$(cd "$(dirname "$0")" && pwd)/.claude.json:/Users/daniel/.claude.json"
+        -v "$(cd "$(dirname "$0")" && pwd)/zsh/.zsh_history:/Users/daniel/.zsh_history"
+        -w /Users/daniel/Projects/personal-agent-marketplace/personal-agent
     )
 
     # Mount GitHub App private key if it exists
     if [[ -f "$GITHUB_APP_PEM" ]]; then
-        docker_args+=(-v "$GITHUB_APP_PEM:/home/dev/.github-app-key.pem:ro")
+        docker_args+=(-v "$GITHUB_APP_PEM:/Users/daniel/.github-app-key.pem:ro")
         docker_args+=(-e "GITHUB_APP_CLIENT_ID=$GITHUB_APP_CLIENT_ID")
         docker_args+=(-e "GITHUB_APP_INSTALLATION_ID=$GITHUB_APP_INSTALLATION_ID")
     else
@@ -215,6 +215,8 @@ start_container() {
     if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
         docker_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
     fi
+
+    docker_args+=(-e "BRAIN_REPO_PATH=/Users/daniel/Projects/personal-agent-marketplace/personal-agent-brain")
 
     # Pass argent tool-server token and port if the server is configured and reachable
     inject_argent_env
@@ -231,9 +233,11 @@ start_container() {
     fi
 
     echo "Starting claude-sandbox container..."
+    # PID 1 is `sleep infinity` so shells are exec sessions — exiting one
+    # leaves the container (and every other shell) running.
+    docker run -d "${docker_args[@]}" "$IMAGE_NAME" sleep infinity
+
     if [[ "$ISOLATED" == true ]]; then
-        # Start detached, apply firewall rules, then attach
-        docker run -d "${docker_args[@]}" "$IMAGE_NAME" sleep infinity
         echo "Applying network isolation (allowing only Anthropic API)..."
         docker exec "$CONTAINER_NAME" iptables -A OUTPUT -o lo -j ACCEPT
         docker exec "$CONTAINER_NAME" iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
@@ -244,14 +248,13 @@ start_container() {
         docker exec "$CONTAINER_NAME" iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
         docker exec "$CONTAINER_NAME" iptables -A OUTPUT -j DROP
         echo "Network isolated. Only Anthropic API traffic allowed."
-        docker exec -it "$CONTAINER_NAME" /bin/zsh
-    else
-        docker run "${docker_args[@]}" "$IMAGE_NAME"
     fi
+
+    attach_container
 }
 
 attach_container() {
-    echo "Attaching to running claude-sandbox container..."
+    echo "Opening shell in claude-sandbox container..."
     docker exec -it "$CONTAINER_NAME" /bin/zsh
 }
 

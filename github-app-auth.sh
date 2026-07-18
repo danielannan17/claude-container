@@ -4,9 +4,9 @@
 # gh: uses GH_TOKEN env var via a shell function wrapper (fresh token per call).
 set -euo pipefail
 
-TOKEN_SCRIPT="/home/dev/github-app-token.sh"
+TOKEN_SCRIPT="/Users/daniel/github-app-token.sh"
 
-if [[ ! -f /home/dev/.github-app-key.pem ]]; then
+if [[ ! -f /Users/daniel/.github-app-key.pem ]]; then
     echo "No GitHub App key found, skipping auth setup."
     exit 0
 fi
