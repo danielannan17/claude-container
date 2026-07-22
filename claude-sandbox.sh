@@ -196,6 +196,8 @@ start_container() {
         -v "$CLAUDE_DIR:/Users/daniel/.claude"
         -v "claude-sandbox-ide:/Users/daniel/.claude/ide"
         -v "claude-sandbox-nvim-data:/Users/daniel/.local/share/nvim"
+        -v "claude-sandbox-venvs:/Users/daniel/.venvs"
+        -v "$HOME/.voicepipe:/Users/daniel/.voicepipe:ro"
 
         -v "$(cd "$(dirname "$0")" && pwd)/.claude.json:/Users/daniel/.claude.json"
         -v "$(cd "$(dirname "$0")" && pwd)/zsh/.zsh_history:/Users/daniel/.zsh_history"
@@ -255,7 +257,16 @@ start_container() {
 
 attach_container() {
     echo "Opening shell in claude-sandbox container..."
-    docker exec -it "$CONTAINER_NAME" /bin/zsh
+    # Forward terminal-identity env vars so hyperlink/capability detection
+    # inside the container (e.g. OSC 8 links in the statusline) recognizes
+    # the real host terminal instead of degrading to plain text.
+    docker exec -it \
+        -e "TERM_PROGRAM=${TERM_PROGRAM:-}" \
+        -e "TERM_PROGRAM_VERSION=${TERM_PROGRAM_VERSION:-}" \
+        -e "LC_TERMINAL=${LC_TERMINAL:-}" \
+        -e "LC_TERMINAL_VERSION=${LC_TERMINAL_VERSION:-}" \
+        -e "ITERM_SESSION_ID=${ITERM_SESSION_ID:-}" \
+        "$CONTAINER_NAME" /bin/zsh
 }
 
 stop_container() {

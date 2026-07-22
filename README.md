@@ -17,6 +17,11 @@ A Docker-based sandbox for running Claude Code in an isolated container. Mounts 
 ./claude-sandbox.sh build
 ```
 
+Poetry keeps virtualenvs out of the mounted `~/Projects` tree (it's shared byte-identical
+with the host, so a venv built on one side can't work on the other — see
+`design-log/005-host-matching-paths.md`). After building the image, run `poetry install`
+once per Python project inside the container to populate its venv under `~/.venvs`.
+
 ## Usage
 
 ```

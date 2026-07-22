@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \
+    python-is-python3 \
     ca-certificates \
     gnupg \
     sudo \
@@ -89,7 +90,7 @@ COPY --chown=dev terminal_cmd.patch /tmp/terminal_cmd.patch
 RUN cd /Users/daniel/.config/nvim && patch -p0 < /tmp/terminal_cmd.patch && rm /tmp/terminal_cmd.patch
 
 # Pre-create dirs so named volumes inherit dev ownership (not root)
-RUN mkdir -p /Users/daniel/.local/share/nvim /Users/daniel/.claude/ide /Users/daniel/.config/lazygit && touch /Users/daniel/.config/lazygit/config.yml
+RUN mkdir -p /Users/daniel/.local/share/nvim /Users/daniel/.claude/ide /Users/daniel/.config/lazygit /Users/daniel/.venvs && touch /Users/daniel/.config/lazygit/config.yml
 
 # Install fzf
 RUN git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf && \
@@ -97,6 +98,14 @@ RUN git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf && \
 
 # Install poetry
 RUN curl -sSL https://install.python-poetry.org | python3 -
+
+# ~/Projects is bind-mounted byte-identical from the host (see design-log 005), so
+# an in-project .venv would be the SAME directory on both sides. A venv built by the
+# host's Homebrew Python has Darwin binaries under it; one built in-container would
+# have Linux binaries — either way the other side's `poetry run` breaks. Keep venvs
+# out of the shared tree entirely, in a container-only directory.
+ENV POETRY_VIRTUALENVS_IN_PROJECT=false \
+    POETRY_VIRTUALENVS_PATH=/Users/daniel/.venvs
 
 # Install gh-dash extension
 RUN gh extension install dlvhdr/gh-dash
