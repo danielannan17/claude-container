@@ -235,9 +235,11 @@ start_container() {
     fi
 
     echo "Starting claude-sandbox container..."
-    # PID 1 is `sleep infinity` so shells are exec sessions — exiting one
-    # leaves the container (and every other shell) running.
-    docker run -d "${docker_args[@]}" "$IMAGE_NAME" sleep infinity
+    # The container's main process is `sleep infinity`, so shells are exec
+    # sessions — exiting one leaves the container (and every other shell)
+    # running. --init runs it under tini as PID 1, which reaps orphans from
+    # those exec sessions; `sleep` never would, and zombies would accumulate.
+    docker run -d --init "${docker_args[@]}" "$IMAGE_NAME" sleep infinity
 
     if [[ "$ISOLATED" == true ]]; then
         echo "Applying network isolation (allowing only Anthropic API)..."
@@ -257,6 +259,10 @@ start_container() {
 
 attach_container() {
     echo "Opening shell in claude-sandbox container..."
+    # Closing the terminal tab only kills the host-side docker client and HUPs
+    # this script; the trap reaps the orphaned container-side session tree.
+    local sid="attach-$$-$RANDOM"
+    trap 'docker exec "$CONTAINER_NAME" sh -c "pid=\$(cat /tmp/'"$sid"'.pid 2>/dev/null) && pkill -9 -s \"\$pid\"; rm -f /tmp/'"$sid"'.pid" >/dev/null 2>&1 || true' HUP EXIT
     # Forward terminal-identity env vars so hyperlink/capability detection
     # inside the container (e.g. OSC 8 links in the statusline) recognizes
     # the real host terminal instead of degrading to plain text.
@@ -266,7 +272,7 @@ attach_container() {
         -e "LC_TERMINAL=${LC_TERMINAL:-}" \
         -e "LC_TERMINAL_VERSION=${LC_TERMINAL_VERSION:-}" \
         -e "ITERM_SESSION_ID=${ITERM_SESSION_ID:-}" \
-        "$CONTAINER_NAME" /bin/zsh
+        "$CONTAINER_NAME" /bin/sh -c "echo \$\$ > /tmp/$sid.pid; exec /bin/zsh"
 }
 
 stop_container() {

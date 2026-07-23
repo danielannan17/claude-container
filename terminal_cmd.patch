@@ -1,10 +1,11 @@
 --- lua/custom/plugins/ai.lua
 +++ lua/custom/plugins/ai.lua
-@@ -40,6 +40,7 @@
+@@ -49,7 +49,7 @@
      "coder/claudecode.nvim",
      dependencies = { "folke/snacks.nvim" },
      opts = {
-+      terminal_cmd = "/usr/bin/claude --dangerously-skip-permissions",
+-      terminal_cmd = [[sh -c 's="claude-$(basename "$PWD" | tr . _)"; trap "docker exec claude-sandbox tmux kill-session -t \"$s\" 2>/dev/null" HUP EXIT; docker exec -it -w "$PWD" -e LANG=C.utf8 claude-sandbox tmux new-session -A -s "$s" claude \; set status off']],
++      terminal_cmd = "/Users/daniel/.local/bin/claude --dangerously-skip-permissions",
        terminal = {
          ---@module "snacks"
          ---@type snacks.win.Config|{}
